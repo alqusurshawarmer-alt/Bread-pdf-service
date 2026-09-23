@@ -22,8 +22,7 @@ CORS(app)
 SUPABASE_URL = 'https://rgmmtroobtxltcyykxtl.supabase.co'
 SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnbW10cm9vYnR4bHRjeXlreHRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxODU2NTMsImV4cCI6MjEwMDc2MTY1M30.MxrlRj31hbPWVLJ3Fhw1h3q-vjdki3YNYpZqw9nGk-c'
 
-# Store list — English name (must match Supabase) + Arabic name
-# UPDATED 2026-09: renamed 51→310 and 212→308
+# Store list — English name (must match Supabase exactly) + Arabic name
 STORES = [
     ("219-Al Faisaliayh (King Fahd Rd.)",              "الفيصلية - طريق الملك فهد"),
     ("280-Dahya King Fahad - Go station",               "ضاحية الملك فهد - محطة Go"),
@@ -39,7 +38,7 @@ STORES = [
     ("53-Al Buhayrah",                                  "البحيرة"),
 ]
 
-# Register Amiri font (files in same directory as app.py)
+# Register Amiri font
 font_dir = os.path.dirname(__file__)
 try:
     pdfmetrics.registerFont(TTFont('Amiri', os.path.join(font_dir, 'Amiri-Regular.ttf')))
@@ -53,7 +52,6 @@ except Exception as e:
 
 
 def shape_arabic(text):
-    """Reshape and apply bidi to Arabic text for correct rendering."""
     try:
         reshaped = arabic_reshaper.reshape(text)
         return get_display(reshaped)
@@ -62,24 +60,62 @@ def shape_arabic(text):
 
 
 def fetch_orders(date_str):
-    """Fetch all orders for a given date from Supabase."""
-    url = (
-        f"{SUPABASE_URL}/rest/v1/orders"
-        f"?date=eq.{date_str}"
-        f"&apikey={SUPABASE_KEY}"
-    )
+    """
+    Fetch orders for a given date. Tries YYYY-MM-DD format first,
+    then MM/DD/YYYY format as fallback (in case dates are stored differently).
+    """
+    headers = {'apikey': SUPABASE_KEY, 'Authorization': f'Bearer {SUPABASE_KEY}'}
+
+    # Try YYYY-MM-DD first
+    url1 = f"{SUPABASE_URL}/rest/v1/orders?date=eq.{date_str}&apikey={SUPABASE_KEY}"
+    try:
+        resp = requests.get(url1, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        print(f"Query {date_str}: {len(data)} rows")
+        if data:
+            return data
+    except Exception as e:
+        print(f"Fetch error (attempt 1): {e}")
+
+    # Try MM/DD/YYYY as fallback
+    try:
+        dt = datetime.strptime(date_str, '%Y-%m-%d')
+        alt_date = dt.strftime('%m/%d/%Y')
+        url2 = f"{SUPABASE_URL}/rest/v1/orders?date=eq.{alt_date}&apikey={SUPABASE_KEY}"
+        resp2 = requests.get(url2, timeout=15)
+        resp2.raise_for_status()
+        data2 = resp2.json()
+        print(f"Query {alt_date}: {len(data2)} rows")
+        if data2:
+            return data2
+    except Exception as e:
+        print(f"Fetch error (attempt 2): {e}")
+
+    return []
+
+
+def fetch_all_dates():
+    """Debug: fetch recent orders to see what date format is used."""
+    url = f"{SUPABASE_URL}/rest/v1/orders?select=date,store_name,quantity&limit=20&order=id.desc&apikey={SUPABASE_KEY}"
     try:
         resp = requests.get(url, timeout=15)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
-        print(f"Supabase fetch error: {e}")
-        return []
+        return [{"error": str(e)}]
 
 
 @app.route('/health')
 def health():
     return jsonify({"status": "ok"})
+
+
+@app.route('/debug')
+def debug():
+    """Shows recent orders from Supabase — use to verify date format."""
+    rows = fetch_all_dates()
+    return jsonify({"recent_orders": rows, "total": len(rows)})
 
 
 @app.route('/generate-pdf')
@@ -88,7 +124,6 @@ def generate_pdf():
     if not date_str:
         return jsonify({"error": "date parameter required (YYYY-MM-DD)"}), 400
 
-    # Fetch orders
     orders_raw = fetch_orders(date_str)
 
     # Build lookup: store_name → quantity
@@ -105,7 +140,7 @@ def generate_pdf():
         display_date = date_str
         display_date_ar = date_str
 
-    # --- Build PDF in memory ---
+    # Build PDF
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -118,66 +153,26 @@ def generate_pdf():
 
     styles = getSampleStyleSheet()
 
-    # Custom styles
-    title_style = ParagraphStyle(
-        'TitleStyle',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=16,
-        alignment=TA_CENTER,
-        spaceAfter=4,
-    )
-    subtitle_style = ParagraphStyle(
-        'SubtitleStyle',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=11,
-        alignment=TA_CENTER,
-        spaceAfter=2,
-        textColor=colors.HexColor('#555555'),
-    )
-    arabic_title_style = ParagraphStyle(
-        'ArabicTitle',
-        parent=styles['Normal'],
-        fontName=ARABIC_FONT_BOLD,
-        fontSize=16,
-        alignment=TA_CENTER,
-        spaceAfter=4,
-    )
-    arabic_sub_style = ParagraphStyle(
-        'ArabicSub',
-        parent=styles['Normal'],
-        fontName=ARABIC_FONT,
-        fontSize=11,
-        alignment=TA_CENTER,
-        spaceAfter=2,
-        textColor=colors.HexColor('#555555'),
-    )
-    cell_en_style = ParagraphStyle(
-        'CellEN',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=9,
-        alignment=TA_LEFT,
-    )
-    cell_ar_style = ParagraphStyle(
-        'CellAR',
-        parent=styles['Normal'],
-        fontName=ARABIC_FONT,
-        fontSize=9,
-        alignment=TA_RIGHT,
-    )
-    cell_num_style = ParagraphStyle(
-        'CellNum',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=10,
-        alignment=TA_CENTER,
-    )
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=16, alignment=TA_CENTER, spaceAfter=4)
+    subtitle_style = ParagraphStyle('SubtitleStyle', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=11, alignment=TA_CENTER, spaceAfter=2,
+        textColor=colors.HexColor('#555555'))
+    arabic_title_style = ParagraphStyle('ArabicTitle', parent=styles['Normal'],
+        fontName=ARABIC_FONT_BOLD, fontSize=16, alignment=TA_CENTER, spaceAfter=4)
+    arabic_sub_style = ParagraphStyle('ArabicSub', parent=styles['Normal'],
+        fontName=ARABIC_FONT, fontSize=11, alignment=TA_CENTER, spaceAfter=2,
+        textColor=colors.HexColor('#555555'))
+    cell_en_style = ParagraphStyle('CellEN', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=9, alignment=TA_LEFT)
+    cell_ar_style = ParagraphStyle('CellAR', parent=styles['Normal'],
+        fontName=ARABIC_FONT, fontSize=9, alignment=TA_RIGHT)
+    cell_num_style = ParagraphStyle('CellNum', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER)
 
     elements = []
 
-    # --- Logo ---
+    # Logo
     logo_path = os.path.join(font_dir, 'logo.png')
     if os.path.exists(logo_path):
         try:
@@ -188,7 +183,7 @@ def generate_pdf():
         except Exception:
             pass
 
-    # --- Header ---
+    # Header
     elements.append(Paragraph("Shawarmer — Eastern Region (Dammam &amp; Khobar)", title_style))
     elements.append(Paragraph(shape_arabic("شاورمر - المنطقة الشرقية (الدمام والخبر)"), arabic_title_style))
     elements.append(Spacer(1, 2*mm))
@@ -199,12 +194,14 @@ def generate_pdf():
     elements.append(Paragraph(shape_arabic(f"تاريخ الطلب: {display_date_ar}"), arabic_sub_style))
     elements.append(Spacer(1, 5*mm))
 
-    # --- Table ---
-    # Header row
+    # Table header
     header_en = Paragraph("<b>#</b>", cell_num_style)
-    header_store_en = Paragraph("<b>Store (English)</b>", ParagraphStyle('H', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT))
-    header_store_ar = Paragraph(shape_arabic("<b>المتجر (عربي)</b>"), ParagraphStyle('H2', parent=styles['Normal'], fontName=ARABIC_FONT_BOLD, fontSize=9, alignment=TA_RIGHT))
-    header_qty = Paragraph("<b>Packets</b>", ParagraphStyle('H3', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_CENTER))
+    header_store_en = Paragraph("<b>Store (English)</b>",
+        ParagraphStyle('H', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT))
+    header_store_ar = Paragraph(shape_arabic("المتجر (عربي)"),
+        ParagraphStyle('H2', parent=styles['Normal'], fontName=ARABIC_FONT_BOLD, fontSize=9, alignment=TA_RIGHT))
+    header_qty = Paragraph("<b>Packets</b>",
+        ParagraphStyle('H3', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_CENTER))
 
     table_data = [[header_en, header_store_en, header_store_ar, header_qty]]
 
@@ -223,17 +220,17 @@ def generate_pdf():
         table_data.append([row_num, row_en, row_ar, row_qty])
 
     # Total row
-    total_label_en = Paragraph("<b>TOTAL</b>", ParagraphStyle('Tot', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, alignment=TA_LEFT))
-    total_label_ar = Paragraph(shape_arabic("<b>الإجمالي</b>"), ParagraphStyle('TotAr', parent=styles['Normal'], fontName=ARABIC_FONT_BOLD, fontSize=10, alignment=TA_RIGHT))
-    total_qty = Paragraph(f"<b>{total}</b>", ParagraphStyle('TotQ', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, alignment=TA_CENTER))
+    total_label_en = Paragraph("<b>TOTAL</b>",
+        ParagraphStyle('Tot', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, alignment=TA_LEFT))
+    total_label_ar = Paragraph(shape_arabic("الإجمالي"),
+        ParagraphStyle('TotAr', parent=styles['Normal'], fontName=ARABIC_FONT_BOLD, fontSize=10, alignment=TA_RIGHT))
+    total_qty = Paragraph(f"<b>{total}</b>",
+        ParagraphStyle('TotQ', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, alignment=TA_CENTER))
     table_data.append(["", total_label_en, total_label_ar, total_qty])
 
-    # Column widths (page width ~180mm minus margins)
     col_widths = [10*mm, 72*mm, 72*mm, 22*mm]
-
     t = Table(table_data, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
-        # Header
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#c8102e')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -241,13 +238,10 @@ def generate_pdf():
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#fff5f5')]),
-        # Total row
         ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#ffeaea')),
         ('LINEBELOW', (0, -1), (-1, -1), 1.5, colors.HexColor('#c8102e')),
-        # Grid
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
         ('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.HexColor('#c8102e')),
-        # Padding
         ('TOPPADDING', (0, 0), (-1, -1), 4),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
@@ -257,15 +251,9 @@ def generate_pdf():
     elements.append(t)
     elements.append(Spacer(1, 8*mm))
 
-    # Footer
-    footer_style = ParagraphStyle(
-        'Footer',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=8,
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#888888'),
-    )
+    footer_style = ParagraphStyle('Footer', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=8, alignment=TA_CENTER,
+        textColor=colors.HexColor('#888888'))
     elements.append(Paragraph(
         f"Generated by Shawarmer Bread Ordering System • {datetime.now().strftime('%Y-%m-%d %H:%M')} AST",
         footer_style
@@ -275,12 +263,8 @@ def generate_pdf():
     buffer.seek(0)
 
     filename = f"shawarmer-bread-order-{date_str}.pdf"
-    return send_file(
-        buffer,
-        mimetype='application/pdf',
-        as_attachment=True,
-        download_name=filename,
-    )
+    return send_file(buffer, mimetype='application/pdf',
+                     as_attachment=True, download_name=filename)
 
 
 if __name__ == '__main__':
