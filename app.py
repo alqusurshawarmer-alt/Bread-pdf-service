@@ -97,7 +97,7 @@ def fetch_orders(date_str):
 
 def fetch_all_dates():
     """Debug: fetch recent orders to see what date format is used."""
-    url = f"{SUPABASE_URL}/rest/v1/orders?select=date,store_name,quantity&limit=20&order=id.desc&apikey={SUPABASE_KEY}"
+    url = f"{SUPABASE_URL}/rest/v1/orders?select=id,date,store_name,quantity&limit=20&order=id.desc&apikey={SUPABASE_KEY}"
     try:
         resp = requests.get(url, timeout=15)
         resp.raise_for_status()
