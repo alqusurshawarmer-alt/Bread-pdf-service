@@ -60,44 +60,23 @@ def shape_arabic(text):
 
 
 def fetch_orders(date_str):
-    """
-    Fetch orders for a given date. Tries YYYY-MM-DD format first,
-    then MM/DD/YYYY format as fallback (in case dates are stored differently).
-    """
-    headers = {'apikey': SUPABASE_KEY, 'Authorization': f'Bearer {SUPABASE_KEY}'}
-
-    # Try YYYY-MM-DD first
-    url1 = f"{SUPABASE_URL}/rest/v1/orders?date=eq.{date_str}&apikey={SUPABASE_KEY}"
+    """Fetch orders for a given date."""
+    # Columns are: store, date, packets (NOT store_name / quantity)
+    url = f"{SUPABASE_URL}/rest/v1/orders?select=store,date,packets&date=eq.{date_str}&apikey={SUPABASE_KEY}"
     try:
-        resp = requests.get(url1, timeout=15)
+        resp = requests.get(url, timeout=15)
         resp.raise_for_status()
         data = resp.json()
         print(f"Query {date_str}: {len(data)} rows")
-        if data:
-            return data
+        return data
     except Exception as e:
-        print(f"Fetch error (attempt 1): {e}")
-
-    # Try MM/DD/YYYY as fallback
-    try:
-        dt = datetime.strptime(date_str, '%Y-%m-%d')
-        alt_date = dt.strftime('%m/%d/%Y')
-        url2 = f"{SUPABASE_URL}/rest/v1/orders?date=eq.{alt_date}&apikey={SUPABASE_KEY}"
-        resp2 = requests.get(url2, timeout=15)
-        resp2.raise_for_status()
-        data2 = resp2.json()
-        print(f"Query {alt_date}: {len(data2)} rows")
-        if data2:
-            return data2
-    except Exception as e:
-        print(f"Fetch error (attempt 2): {e}")
-
-    return []
+        print(f"Fetch error: {e}")
+        return []
 
 
 def fetch_all_dates():
-    """Debug: fetch recent orders to see what date format is used."""
-    url = f"{SUPABASE_URL}/rest/v1/orders?select=date,store_name,quantity&limit=20&apikey={SUPABASE_KEY}"
+    """Debug: fetch recent orders."""
+    url = f"{SUPABASE_URL}/rest/v1/orders?select=store,date,packets&limit=20&apikey={SUPABASE_KEY}"
     try:
         resp = requests.get(url, timeout=15)
         resp.raise_for_status()
@@ -126,10 +105,10 @@ def generate_pdf():
 
     orders_raw = fetch_orders(date_str)
 
-    # Build lookup: store_name → quantity
+    # Build lookup: store → packets
     order_map = {}
     for row in orders_raw:
-        order_map[row.get('store_name', '')] = row.get('quantity', 0)
+        order_map[row.get('store', '')] = row.get('packets', 0)
 
     # Format date for display
     try:
@@ -173,7 +152,10 @@ def generate_pdf():
     elements = []
 
     # Logo
+    # Try both logo filenames
     logo_path = os.path.join(font_dir, 'logo.png')
+    if not os.path.exists(logo_path):
+        logo_path = os.path.join(font_dir, 'logo.png.jpeg')
     if os.path.exists(logo_path):
         try:
             logo = Image(logo_path, width=40*mm, height=14*mm)
