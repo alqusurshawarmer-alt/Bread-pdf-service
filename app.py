@@ -131,111 +131,176 @@ def generate_pdf():
     )
 
     styles = getSampleStyleSheet()
+    MAROON = colors.HexColor('#6b1a2a')
+    GOLD   = colors.HexColor('#c8a84b')
+    WHITE  = colors.white
 
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Normal'],
-        fontName='Helvetica-Bold', fontSize=16, alignment=TA_CENTER, spaceAfter=4)
-    subtitle_style = ParagraphStyle('SubtitleStyle', parent=styles['Normal'],
-        fontName='Helvetica', fontSize=11, alignment=TA_CENTER, spaceAfter=2,
-        textColor=colors.HexColor('#555555'))
-    arabic_title_style = ParagraphStyle('ArabicTitle', parent=styles['Normal'],
-        fontName=ARABIC_FONT_BOLD, fontSize=16, alignment=TA_CENTER, spaceAfter=4)
-    arabic_sub_style = ParagraphStyle('ArabicSub', parent=styles['Normal'],
-        fontName=ARABIC_FONT, fontSize=11, alignment=TA_CENTER, spaceAfter=2,
-        textColor=colors.HexColor('#555555'))
+    # Paragraph styles
+    hdr_en_style = ParagraphStyle('HdrEN', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=18, alignment=TA_LEFT,
+        textColor=WHITE, leading=22)
+    hdr_sub_en_style = ParagraphStyle('HdrSubEN', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=9, alignment=TA_LEFT,
+        textColor=colors.HexColor('#dddddd'), leading=13)
+    hdr_date_en_style = ParagraphStyle('HdrDateEN', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=8, alignment=TA_LEFT,
+        textColor=colors.HexColor('#dddddd'), leading=12)
+    hdr_ar_style = ParagraphStyle('HdrAR', parent=styles['Normal'],
+        fontName=ARABIC_FONT_BOLD, fontSize=18, alignment=TA_RIGHT,
+        textColor=WHITE, leading=22)
+    hdr_date_ar_style = ParagraphStyle('HdrDateAR', parent=styles['Normal'],
+        fontName=ARABIC_FONT, fontSize=8, alignment=TA_RIGHT,
+        textColor=colors.HexColor('#dddddd'), leading=12)
+    banner_en_style = ParagraphStyle('BannerEN', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT,
+        textColor=MAROON)
+    banner_ar_style = ParagraphStyle('BannerAR', parent=styles['Normal'],
+        fontName=ARABIC_FONT_BOLD, fontSize=9, alignment=TA_RIGHT,
+        textColor=MAROON)
     cell_en_style = ParagraphStyle('CellEN', parent=styles['Normal'],
         fontName='Helvetica', fontSize=9, alignment=TA_LEFT)
     cell_ar_style = ParagraphStyle('CellAR', parent=styles['Normal'],
         fontName=ARABIC_FONT, fontSize=9, alignment=TA_RIGHT)
     cell_num_style = ParagraphStyle('CellNum', parent=styles['Normal'],
         fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER)
-
-    elements = []
-
-    # Logo
-    # Try both logo filenames
-    logo_path = os.path.join(font_dir, 'logo.png')
-    if not os.path.exists(logo_path):
-        logo_path = os.path.join(font_dir, 'logo.png.jpeg')
-    if os.path.exists(logo_path):
-        try:
-            logo = Image(logo_path, width=40*mm, height=14*mm)
-            logo.hAlign = 'CENTER'
-            elements.append(logo)
-            elements.append(Spacer(1, 3*mm))
-        except Exception:
-            pass
-
-    # Header
-    elements.append(Paragraph("Shawarmer — Eastern Region (Dammam &amp; Khobar)", title_style))
-    elements.append(Paragraph(shape_arabic("شاورمر - المنطقة الشرقية (الدمام والخبر)"), arabic_title_style))
-    elements.append(Spacer(1, 2*mm))
-    elements.append(Paragraph("Fresh Arabic Bread Order", subtitle_style))
-    elements.append(Paragraph(shape_arabic("طلب الخبز العربي الطازج"), arabic_sub_style))
-    elements.append(Spacer(1, 2*mm))
-    elements.append(Paragraph(f"Order Date: {display_date}", subtitle_style))
-    elements.append(Paragraph(shape_arabic(f"تاريخ الطلب: {display_date_ar}"), arabic_sub_style))
-    elements.append(Spacer(1, 5*mm))
-
-    # Table header
-    header_en = Paragraph("<b>#</b>", cell_num_style)
-    header_store_en = Paragraph("<b>Store (English)</b>",
-        ParagraphStyle('H', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT))
-    header_store_ar = Paragraph(shape_arabic("المتجر (عربي)"),
-        ParagraphStyle('H2', parent=styles['Normal'], fontName=ARABIC_FONT_BOLD, fontSize=9, alignment=TA_RIGHT))
-    header_qty = Paragraph("<b>Packets</b>",
-        ParagraphStyle('H3', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_CENTER))
-
-    table_data = [[header_en, header_store_en, header_store_ar, header_qty]]
-
-    total = 0
-    for i, (en_name, ar_name) in enumerate(STORES, start=1):
-        qty = order_map.get(en_name, 0)
-        total += qty
-
-        row_num = Paragraph(str(i), cell_num_style)
-        row_en = Paragraph(en_name, cell_en_style)
-        row_ar = Paragraph(shape_arabic(ar_name), cell_ar_style)
-        row_qty = Paragraph(
-            f"<b>{qty}</b>" if qty > 0 else "<font color='#aaaaaa'>—</font>",
-            cell_num_style
-        )
-        table_data.append([row_num, row_en, row_ar, row_qty])
-
-    # Total row
-    total_label_en = Paragraph("<b>TOTAL</b>",
-        ParagraphStyle('Tot', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, alignment=TA_LEFT))
-    total_label_ar = Paragraph(shape_arabic("الإجمالي"),
-        ParagraphStyle('TotAr', parent=styles['Normal'], fontName=ARABIC_FONT_BOLD, fontSize=10, alignment=TA_RIGHT))
-    total_qty = Paragraph(f"<b>{total}</b>",
-        ParagraphStyle('TotQ', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, alignment=TA_CENTER))
-    table_data.append(["", total_label_en, total_label_ar, total_qty])
-
-    col_widths = [10*mm, 72*mm, 72*mm, 22*mm]
-    t = Table(table_data, colWidths=col_widths, repeatRows=1)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#c8102e')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#fff5f5')]),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#ffeaea')),
-        ('LINEBELOW', (0, -1), (-1, -1), 1.5, colors.HexColor('#c8102e')),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
-        ('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.HexColor('#c8102e')),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-    ]))
-
-    elements.append(t)
-    elements.append(Spacer(1, 8*mm))
-
+    th_en_style = ParagraphStyle('ThEN', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT, textColor=WHITE)
+    th_ar_style = ParagraphStyle('ThAR', parent=styles['Normal'],
+        fontName=ARABIC_FONT_BOLD, fontSize=9, alignment=TA_RIGHT, textColor=WHITE)
+    th_num_style = ParagraphStyle('ThNum', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=9, alignment=TA_CENTER, textColor=WHITE)
+    tot_en_style = ParagraphStyle('TotEN', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=10, alignment=TA_LEFT)
+    tot_ar_style = ParagraphStyle('TotAR', parent=styles['Normal'],
+        fontName=ARABIC_FONT_BOLD, fontSize=10, alignment=TA_RIGHT)
+    tot_num_style = ParagraphStyle('TotNum', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=11, alignment=TA_CENTER)
     footer_style = ParagraphStyle('Footer', parent=styles['Normal'],
         fontName='Helvetica', fontSize=8, alignment=TA_CENTER,
         textColor=colors.HexColor('#888888'))
+
+    elements = []
+    page_w = A4[0] - 30*mm  # usable width
+
+    # ── HEADER BOX (maroon background, logo left, title centre, Arabic right) ──
+    logo_path = os.path.join(font_dir, 'logo.png')
+    if not os.path.exists(logo_path):
+        logo_path = os.path.join(font_dir, 'logo.png.jpeg')
+
+    logo_cell = ""
+    if os.path.exists(logo_path):
+        try:
+            logo_cell = Image(logo_path, width=38*mm, height=38*mm)
+        except Exception:
+            pass
+
+    title_cell = Table([
+        [Paragraph("Fresh Arabic Bread", hdr_en_style)],
+        [Paragraph("Daily Order Sheet  ·  Consolidated", hdr_sub_en_style)],
+        [Paragraph(f"Date: {display_date}    Generated: {datetime.now().strftime('%d/%m/%Y %I:%M %p')}", hdr_date_en_style)],
+    ], colWidths=[70*mm])
+    title_cell.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 2),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+    ]))
+
+    ar_cell = Table([
+        [Paragraph(shape_arabic("خبز عربي طازج"), hdr_ar_style)],
+        [Paragraph(shape_arabic(f"التاريخ: {display_date_ar}"), hdr_date_ar_style)],
+    ], colWidths=[60*mm])
+    ar_cell.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 2),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+    ]))
+
+    header_table = Table(
+        [[logo_cell, title_cell, ar_cell]],
+        colWidths=[38*mm, 70*mm, 60*mm + (page_w - 38*mm - 70*mm - 60*mm)]
+    )
+    header_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), MAROON),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('ROUNDEDCORNERS', [4, 4, 4, 4]),
+    ]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 2*mm))
+
+    # ── GOLD INFO BANNER ──
+    banner_en = Paragraph("1 packet = 6 pcs of Arabic bread", banner_en_style)
+    banner_ar = Paragraph(
+        shape_arabic("شاورمر — المنطقة الشرقية (الدمام والخبر)  |  ١ طرد = ٦ قطع خبز عربي"),
+        banner_ar_style)
+    banner_table = Table([[banner_en, banner_ar]], colWidths=[page_w/2, page_w/2])
+    banner_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), GOLD),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('LEFTPADDING', (0,0), (-1,-1), 8),
+        ('RIGHTPADDING', (0,0), (-1,-1), 8),
+    ]))
+    elements.append(banner_table)
+    elements.append(Spacer(1, 4*mm))
+
+    # ── ORDER TABLE ──
+    col_en  = 82*mm
+    col_ar  = 72*mm
+    col_qty = page_w - col_en - col_ar
+
+    table_data = [[
+        Paragraph("Store Name", th_en_style),
+        Paragraph(shape_arabic("اسم الفرع"), th_ar_style),
+        Paragraph("Pkts", th_num_style),
+    ]]
+
+    total = 0
+    for en_name, ar_name in STORES:
+        qty = order_map.get(en_name, 0)
+        total += qty
+        table_data.append([
+            Paragraph(en_name, cell_en_style),
+            Paragraph(shape_arabic(ar_name), cell_ar_style),
+            Paragraph(f"<b>{qty}</b>" if qty > 0 else "<font color='#aaaaaa'>—</font>", cell_num_style),
+        ])
+
+    # Total row
+    table_data.append([
+        Paragraph("<b>Total (Pkts)</b>", tot_en_style),
+        Paragraph(shape_arabic("المجموع (طرود)"), tot_ar_style),
+        Paragraph(f"<b>{total}</b>", tot_num_style),
+    ])
+
+    t = Table(table_data, colWidths=[col_en, col_ar, col_qty], repeatRows=1)
+    t.setStyle(TableStyle([
+        # Header row — dark maroon
+        ('BACKGROUND', (0,0), (-1,0), MAROON),
+        ('TEXTCOLOR', (0,0), (-1,0), WHITE),
+        # Alternating rows
+        ('ROWBACKGROUNDS', (0,1), (-1,-2), [WHITE, colors.HexColor('#f9f0f0')]),
+        # Total row
+        ('BACKGROUND', (0,-1), (-1,-1), MAROON),
+        ('TEXTCOLOR', (0,-1), (-1,-1), WHITE),
+        # Grid
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
+        ('LINEBELOW', (0,0), (-1,0), 1.5, GOLD),
+        ('LINEABOVE', (0,-1), (-1,-1), 1.5, GOLD),
+        # Alignment & padding
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (2,0), (2,-1), 'CENTER'),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+    ]))
+    elements.append(t)
+    elements.append(Spacer(1, 6*mm))
+
     elements.append(Paragraph(
         f"Generated by Shawarmer Bread Ordering System • {datetime.now().strftime('%Y-%m-%d %H:%M')} AST",
         footer_style
