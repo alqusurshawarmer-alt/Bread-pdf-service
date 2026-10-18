@@ -170,11 +170,11 @@ def generate_pdf():
     th_num_style = ParagraphStyle('ThNum', parent=styles['Normal'],
         fontName='Helvetica-Bold', fontSize=9, alignment=TA_CENTER, textColor=WHITE)
     tot_en_style = ParagraphStyle('TotEN', parent=styles['Normal'],
-        fontName='Helvetica-Bold', fontSize=10, alignment=TA_LEFT)
+        fontName='Helvetica-Bold', fontSize=10, alignment=TA_LEFT, textColor=MAROON)
     tot_ar_style = ParagraphStyle('TotAR', parent=styles['Normal'],
-        fontName=ARABIC_FONT_BOLD, fontSize=10, alignment=TA_RIGHT)
+        fontName=ARABIC_FONT_BOLD, fontSize=10, alignment=TA_RIGHT, textColor=MAROON)
     tot_num_style = ParagraphStyle('TotNum', parent=styles['Normal'],
-        fontName='Helvetica-Bold', fontSize=11, alignment=TA_CENTER)
+        fontName='Helvetica-Bold', fontSize=11, alignment=TA_CENTER, textColor=MAROON)
     footer_style = ParagraphStyle('Footer', parent=styles['Normal'],
         fontName='Helvetica', fontSize=8, alignment=TA_CENTER,
         textColor=colors.HexColor('#888888'))
@@ -283,13 +283,13 @@ def generate_pdf():
         ('TEXTCOLOR', (0,0), (-1,0), WHITE),
         # Alternating rows
         ('ROWBACKGROUNDS', (0,1), (-1,-2), [WHITE, colors.HexColor('#f9f0f0')]),
-        # Total row
-        ('BACKGROUND', (0,-1), (-1,-1), MAROON),
-        ('TEXTCOLOR', (0,-1), (-1,-1), WHITE),
+        # Total row — gold background with dark text for clear visibility
+        ('BACKGROUND', (0,-1), (-1,-1), GOLD),
+        ('TEXTCOLOR', (0,-1), (-1,-1), MAROON),
         # Grid
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
         ('LINEBELOW', (0,0), (-1,0), 1.5, GOLD),
-        ('LINEABOVE', (0,-1), (-1,-1), 1.5, GOLD),
+        ('LINEABOVE', (0,-1), (-1,-1), 1.5, MAROON),
         # Alignment & padding
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('ALIGN', (2,0), (2,-1), 'CENTER'),
