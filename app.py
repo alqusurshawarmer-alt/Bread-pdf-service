@@ -24,7 +24,6 @@ SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 # Store list — English name (must match Supabase exactly) + Arabic name
 STORES = [
-    ("219-Al Faisaliayh (King Fahd Rd.)",              "الفيصلية - طريق الملك فهد"),
     ("280-Dahya King Fahad - Go station",               "ضاحية الملك فهد - محطة Go"),
     ("82-AlAqrabia (Prince Faisal Bin Fahed Rd.)",      "العقربية - طريق الأمير فيصل بن فهد"),
     ("270-Othman Ibn affan (AlNouzha)",                 "عثمان بن عفان - النزهة"),
