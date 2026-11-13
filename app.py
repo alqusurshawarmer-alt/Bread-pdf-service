@@ -313,6 +313,128 @@ def generate_pdf():
                      as_attachment=True, download_name=filename)
 
 
+@app.route('/generate-image')
+def generate_image():
+    date_str = request.args.get('date')
+    if not date_str:
+        return jsonify({"error": "date parameter required (YYYY-MM-DD)"}), 400
+
+    # Reuse PDF generation logic
+    orders_raw = fetch_orders(date_str)
+    order_map = {}
+    for row in orders_raw:
+        order_map[row.get('store', '')] = row.get('packets', 0)
+
+    try:
+        dt = datetime.strptime(date_str, '%Y-%m-%d')
+        display_date = dt.strftime('%d %B %Y')
+        display_date_ar = dt.strftime('%Y/%m/%d')
+    except Exception:
+        display_date = date_str
+        display_date_ar = date_str
+
+    # Build PDF in memory (reuse same logic)
+    buffer = io.BytesIO()
+    from reportlab.lib.pagesizes import A4
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+        rightMargin=15*mm, leftMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
+
+    styles = getSampleStyleSheet()
+    MAROON = colors.HexColor('#6b1a2a')
+    GOLD   = colors.HexColor('#c8a84b')
+    WHITE  = colors.white
+
+    hdr_en_style = ParagraphStyle('HdrEN2', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=18, alignment=TA_LEFT, textColor=WHITE, leading=22)
+    hdr_sub_en_style = ParagraphStyle('HdrSubEN2', parent=styles['Normal'], fontName='Helvetica', fontSize=9, alignment=TA_LEFT, textColor=colors.HexColor('#dddddd'), leading=13)
+    hdr_date_en_style = ParagraphStyle('HdrDateEN2', parent=styles['Normal'], fontName='Helvetica', fontSize=8, alignment=TA_LEFT, textColor=colors.HexColor('#dddddd'), leading=12)
+    hdr_ar_style = ParagraphStyle('HdrAR2', parent=styles['Normal'], fontName=ARABIC_FONT_BOLD, fontSize=18, alignment=TA_RIGHT, textColor=WHITE, leading=22)
+    hdr_date_ar_style = ParagraphStyle('HdrDateAR2', parent=styles['Normal'], fontName=ARABIC_FONT, fontSize=8, alignment=TA_RIGHT, textColor=colors.HexColor('#dddddd'), leading=12)
+    banner_en_style = ParagraphStyle('BannerEN2', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT, textColor=MAROON)
+    banner_ar_style = ParagraphStyle('BannerAR2', parent=styles['Normal'], fontName=ARABIC_FONT_BOLD, fontSize=9, alignment=TA_RIGHT, textColor=MAROON)
+    cell_en_style = ParagraphStyle('CellEN2', parent=styles['Normal'], fontName='Helvetica', fontSize=9, alignment=TA_LEFT)
+    cell_ar_style = ParagraphStyle('CellAR2', parent=styles['Normal'], fontName=ARABIC_FONT, fontSize=9, alignment=TA_RIGHT)
+    cell_num_style = ParagraphStyle('CellNum2', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER)
+    th_en_style = ParagraphStyle('ThEN2', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT, textColor=WHITE)
+    th_ar_style = ParagraphStyle('ThAR2', parent=styles['Normal'], fontName=ARABIC_FONT_BOLD, fontSize=9, alignment=TA_RIGHT, textColor=WHITE)
+    th_num_style = ParagraphStyle('ThNum2', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_CENTER, textColor=WHITE)
+    tot_en_style = ParagraphStyle('TotEN2', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, alignment=TA_LEFT, textColor=MAROON)
+    tot_ar_style = ParagraphStyle('TotAR2', parent=styles['Normal'], fontName=ARABIC_FONT_BOLD, fontSize=10, alignment=TA_RIGHT, textColor=MAROON)
+    tot_num_style = ParagraphStyle('TotNum2', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, alignment=TA_CENTER, textColor=MAROON)
+    footer_style2 = ParagraphStyle('Footer2', parent=styles['Normal'], fontName='Helvetica', fontSize=8, alignment=TA_CENTER, textColor=colors.HexColor('#888888'))
+
+    elements = []
+    page_w = A4[0] - 30*mm
+
+    font_dir = os.path.dirname(__file__)
+    logo_path = os.path.join(font_dir, 'logo.png')
+    if not os.path.exists(logo_path):
+        logo_path = os.path.join(font_dir, 'logo.png.jpeg')
+
+    logo_cell = ""
+    if os.path.exists(logo_path):
+        try:
+            logo_cell = Image(logo_path, width=38*mm, height=38*mm)
+        except Exception:
+            pass
+
+    title_cell = Table([
+        [Paragraph("Fresh Arabic Bread", hdr_en_style)],
+        [Paragraph("Daily Order Sheet  ·  Consolidated", hdr_sub_en_style)],
+        [Paragraph(f"Date: {display_date}    Generated: {datetime.now().strftime('%d/%m/%Y %I:%M %p')}", hdr_date_en_style)],
+    ], colWidths=[70*mm])
+    title_cell.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'MIDDLE'),('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2)]))
+
+    ar_cell = Table([
+        [Paragraph(shape_arabic("خبز عربي طازج"), hdr_ar_style)],
+        [Paragraph(shape_arabic(f"التاريخ: {display_date_ar}"), hdr_date_ar_style)],
+    ], colWidths=[60*mm])
+    ar_cell.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'MIDDLE'),('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2)]))
+
+    header_table = Table([[logo_cell, title_cell, ar_cell]], colWidths=[38*mm, 70*mm, 60*mm+(page_w-38*mm-70*mm-60*mm)])
+    header_table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),MAROON),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),('TOPPADDING',(0,0),(-1,-1),8),('BOTTOMPADDING',(0,0),(-1,-1),8)]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 2*mm))
+
+    banner_en = Paragraph("1 packet = 6 pcs of Arabic bread", banner_en_style)
+    banner_ar = Paragraph(shape_arabic("شاورمر — المنطقة الشرقية (الدمام والخبر)  |  ١ طرد = ٦ قطع خبز عربي"), banner_ar_style)
+    banner_table = Table([[banner_en, banner_ar]], colWidths=[page_w/2, page_w/2])
+    banner_table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),GOLD),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),('LEFTPADDING',(0,0),(-1,-1),8),('RIGHTPADDING',(0,0),(-1,-1),8)]))
+    elements.append(banner_table)
+    elements.append(Spacer(1, 4*mm))
+
+    col_en = 82*mm; col_ar = 72*mm; col_qty = page_w - col_en - col_ar
+    table_data = [[Paragraph("Store Name", th_en_style), Paragraph(shape_arabic("اسم الفرع"), th_ar_style), Paragraph("Pkts", th_num_style)]]
+    total = 0
+    for en_name, ar_name in STORES:
+        qty = order_map.get(en_name, 0)
+        total += qty
+        table_data.append([Paragraph(en_name, cell_en_style), Paragraph(shape_arabic(ar_name), cell_ar_style), Paragraph(f"<b>{qty}</b>" if qty > 0 else "<font color='#aaaaaa'>—</font>", cell_num_style)])
+    table_data.append([Paragraph("<b>Total (Pkts)</b>", tot_en_style), Paragraph(shape_arabic("المجموع (طرود)"), tot_ar_style), Paragraph(f"<b>{total}</b>", tot_num_style)])
+
+    t = Table(table_data, colWidths=[col_en, col_ar, col_qty], repeatRows=1)
+    t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),MAROON),('TEXTCOLOR',(0,0),(-1,0),WHITE),('ROWBACKGROUNDS',(0,1),(-1,-2),[WHITE,colors.HexColor('#f9f0f0')]),('BACKGROUND',(0,-1),(-1,-1),GOLD),('TEXTCOLOR',(0,-1),(-1,-1),MAROON),('GRID',(0,0),(-1,-1),0.5,colors.HexColor('#cccccc')),('LINEBELOW',(0,0),(-1,0),1.5,GOLD),('LINEABOVE',(0,-1),(-1,-1),1.5,MAROON),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('ALIGN',(2,0),(2,-1),'CENTER'),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6)]))
+    elements.append(t)
+    elements.append(Spacer(1, 6*mm))
+    elements.append(Paragraph(f"Generated by Shawarmer Bread Ordering System • {datetime.now().strftime('%Y-%m-%d %H:%M')} AST", footer_style2))
+    doc.build(elements)
+    buffer.seek(0)
+
+    # Convert PDF to image using pdf2image (needs poppler)
+    try:
+        from pdf2image import convert_from_bytes as _cfb
+        images = _cfb(buffer.read(), dpi=200, fmt='jpeg')
+        img = images[0]
+    except Exception:
+        return jsonify({"error": "Image conversion failed. poppler may not be installed."}), 500
+
+    img_buffer = io.BytesIO()
+    img.save(img_buffer, format='JPEG', quality=92)
+    img_buffer.seek(0)
+
+    filename = f"shawarmer-bread-order-{date_str}.jpg"
+    return send_file(img_buffer, mimetype='image/jpeg', as_attachment=True, download_name=filename)
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
